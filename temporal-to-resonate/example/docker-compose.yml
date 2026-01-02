@@ -1,0 +1,81 @@
+services:
+  # Resonate Server
+  resonate:
+    image: ghcr.io/resonatehq/resonate:latest
+    command: serve
+    ports:
+      - "8001:8001"
+      - "8002:8002"
+
+  # PostgreSQL for Temporal
+  postgresql:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: temporal
+      POSTGRES_PASSWORD: temporal
+    volumes:
+      - temporal-db:/var/lib/postgresql/data
+
+  # Temporal Server
+  temporal:
+    image: temporalio/auto-setup:1.22
+    ports:
+      - "7233:7233"
+    environment:
+      - DB=postgres12
+      - DB_PORT=5432
+      - POSTGRES_USER=temporal
+      - POSTGRES_PWD=temporal
+      - POSTGRES_SEEDS=postgresql
+    depends_on:
+      - postgresql
+
+  # Temporal UI
+  temporal-ui:
+    image: temporalio/ui:2.21.0
+    ports:
+      - "8080:8080"
+    environment:
+      - TEMPORAL_ADDRESS=temporal:7233
+    depends_on:
+      - temporal
+
+  # Temporal Workflow Worker (runs workflows, activities go to bridge)
+  temporal-workflow:
+    build:
+      context: ./temporal-workflow
+      dockerfile: Dockerfile
+    environment:
+      - TEMPORAL_HOST=temporal:7233
+    depends_on:
+      - temporal
+
+  # Resonate Connect: Activity Bridge
+  bridge:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    environment:
+      - TEMPORAL_HOST=temporal:7233
+      - TEMPORAL_NAMESPACE=default
+      - TEMPORAL_TASK_QUEUE=resonate-bridge
+      - RESONATE_URL=http://resonate:8001
+    depends_on:
+      - temporal
+      - resonate
+    restart: on-failure
+
+  # Resonate Worker (executes functions)
+  resonate-worker:
+    build:
+      context: ./resonate-worker
+      dockerfile: Dockerfile
+    environment:
+      - RESONATE_URL=http://resonate:8001
+      - RESONATE_GROUP=default
+    depends_on:
+      - resonate
+      - bridge
+
+volumes:
+  temporal-db:

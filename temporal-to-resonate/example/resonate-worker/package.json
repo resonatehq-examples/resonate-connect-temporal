@@ -1,0 +1,15 @@
+{
+  "name": "resonate-activity-worker",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "npx tsx worker.ts"
+  },
+  "dependencies": {
+    "@resonatehq/sdk": "^0.9.6"
+  },
+  "devDependencies": {
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.0"
+  }
+}

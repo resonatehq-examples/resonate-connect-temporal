@@ -1,0 +1,70 @@
+services:
+  # Resonate Server
+  resonate:
+    image: ghcr.io/resonatehq/resonate:latest
+    command: serve
+    ports:
+      - "8001:8001"
+      - "8002:8002"
+
+  # PostgreSQL for Temporal
+  postgresql:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: temporal
+      POSTGRES_PASSWORD: temporal
+    volumes:
+      - temporal-db:/var/lib/postgresql/data
+
+  # Temporal Server
+  temporal:
+    image: temporalio/auto-setup:1.22
+    ports:
+      - "7233:7233"
+    environment:
+      - DB=postgres12
+      - DB_PORT=5432
+      - POSTGRES_USER=temporal
+      - POSTGRES_PWD=temporal
+      - POSTGRES_SEEDS=postgresql
+    depends_on:
+      - postgresql
+
+  # Temporal UI
+  temporal-ui:
+    image: temporalio/ui:2.21.0
+    ports:
+      - "8080:8080"
+    environment:
+      - TEMPORAL_ADDRESS=temporal:7233
+    depends_on:
+      - temporal
+
+  # Example Temporal Worker (runs workflows)
+  temporal-worker:
+    build:
+      context: ./temporal-worker
+      dockerfile: Dockerfile
+    environment:
+      - TEMPORAL_HOST=temporal:7233
+    depends_on:
+      - temporal
+
+  # Resonate Connect: Temporal Sidecar
+  sidecar:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    environment:
+      - RESONATE_URL=http://resonate:8001
+      - RESONATE_GROUP=temporal
+      - TEMPORAL_HOST=temporal:7233
+      - TEMPORAL_NAMESPACE=default
+      - TEMPORAL_TASK_QUEUE=resonate-queue
+    depends_on:
+      - resonate
+      - temporal
+    restart: on-failure
+
+volumes:
+  temporal-db:
